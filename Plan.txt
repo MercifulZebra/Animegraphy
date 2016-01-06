@@ -1,0 +1,34 @@
+Planning Document
+
+QT User interface capable of searching through a repository of videos and getting videos by tags, show, or length.
+
+Possible Revisions : Replacing video repository with youtube link instead
+
+Repository Organization:
+
+Repository {
+
+  Show {
+    Clip_Name1.video
+    Clip_Name2.video
+    Clip_Name3.video
+    index.txt {
+      Clip_Name1  [ Youtube Link ] [ Tag 1 ] [ Tag 2 ] [ ... ]
+      Clip_Name2  [ Youtube Link ] [ Tag 1 ] [ Tag 2 ] [ ... ]
+      ...
+    }
+  }
+  
+  Show2 {
+    ...
+    ...
+    index.txt {
+      ...
+      ...
+    }
+  }
+  
+  Show 3 {
+    ...
+  }
+}
