@@ -60,7 +60,8 @@ MainWindow::~MainWindow()
     clipDB->mainList->exportClipFile("index.txt");
     QMutableVectorIterator<ClipList *>i(clipDB->database);
     while(i.hasNext()){
-        i.next()->exportClipFile("");
+        ClipList *next = i.next();
+        next->exportClipFile("");
     }
     delete ui;
 }
