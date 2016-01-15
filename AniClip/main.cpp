@@ -8,20 +8,10 @@ int main(int argc, char *argv[])
 {
 
     QString appData_path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir dir(appData_path);
-    if (!dir.exists()){
-        dir.mkpath(appData_path);
-    }
-    if (!dir.exists("AniClip")){
-        dir.mkpath("AniClip");
-    }
 
-    dir.cd("AniClip");
-    QDir::setCurrent(dir.absolutePath());
-    qDebug()<<QDir::current();
 
     QApplication a(argc, argv);
-    MainWindow w;
+    MainWindow w("aniclip_config.txt");
     w.show();
 
 

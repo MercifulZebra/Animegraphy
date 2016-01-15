@@ -21,16 +21,19 @@
 #include <QDesktopServices>
 #include <QInputDialog>
 #include <QDir>
+#include <QStandardPaths>
 
 
-MainWindow::MainWindow(QWidget *parent) :
+MainWindow::MainWindow(QString config, QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
+    config_filename(config),
     index_filename("index.txt"),
     list_filename("listIndex.txt"),
     showHistory_filename("showHistory.txt"),
     tagHistory_filename("tagHistory.txt"),
     tagGroup_filename("tagGroups.txt"),
+    save_flag(false),
     clipDB(NULL),
     activeTreePool(NULL),
     currTreeList(NULL),
@@ -48,7 +51,8 @@ MainWindow::MainWindow(QWidget *parent) :
     tagItemContextMenu(NULL),
     clipItemContextMenu(NULL),
     clipAddMenu(NULL),
-    clipRemoveMenu(NULL)
+    clipRemoveMenu(NULL),
+    listItemContextMenu(NULL)
 {
     ui->setupUi(this);
     init();
@@ -57,17 +61,16 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
 
-    clipDB->mainList->exportClipFile("index.txt");
-    QMutableVectorIterator<ClipList *>i(clipDB->database);
-    while(i.hasNext()){
-        ClipList *next = i.next();
-        next->exportClipFile("");
+    if (save_flag){
+        save_files();
+        backup_files();
     }
     delete ui;
 }
 
 void MainWindow::init() {
-    qDebug()<<"MW"<<QDir::current();
+
+    init_config();
 
     init_objects();
     init_lists();
@@ -79,6 +82,85 @@ void MainWindow::init() {
     init_tagTree();
     init_contextMenus();
 
+    save_flag = true;
+
+}
+
+void MainWindow::init_config() {
+
+    QFile configFile(config_filename);
+
+    if (configFile.open(QIODevice::ReadOnly | QIODevice::Text)){
+        QTextStream config_stream(&configFile);
+
+        while(true) {
+
+            QString config_line = config_stream.readLine();
+            QString param;
+            QString path;
+            if (!config_line.isNull()) {
+                if (!config_line.startsWith("#")){
+                    if(config_line.startsWith("dir")){
+
+                        int in = config_line.indexOf("path::");
+                        if (in != -1){
+                            path = config_line.mid(in + 6);
+                        }
+                        in = config_line.indexOf("loc::");
+                        if (in != -1){
+                            bool valid = false;
+                            param = config_line.mid(in + 5);
+
+                            if (param.startsWith("AppData",Qt::CaseInsensitive)){
+                                path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+                                path.chop(path.length() - path.lastIndexOf("/"));
+                                valid =true;
+                            }
+                            else if (param.startsWith("ProgramData",Qt::CaseInsensitive)){
+                                path = "C:/ProgramData/";
+                                valid = true;
+                            }
+                            else if (param.startsWith("Desktop",Qt::CaseInsensitive)){
+                                path = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+                                valid = true;
+                            }
+                            if (valid) {
+                                in = param.indexOf("/");
+                                if (in != -1){
+                                    path.append(param.mid(in));
+                                }
+                            }
+                            else {
+                                path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+                            }
+                            setWorkingDirectory(path);
+                        }
+                    }
+                    else if(config_line.startsWith("clip_file")){
+                        int in = config_line.indexOf("file::");
+                        if (in != -1){
+                            index_filename = config_line.mid(in + 6);
+                        }
+                    }
+                    else if(config_line.startsWith("list_file")){
+                        int in = config_line.indexOf("file::");
+                        if (in != -1){
+                            list_filename = config_line.mid(in + 6);
+                        }
+                    }
+                    else if(config_line.startsWith("tag_file")){
+                        int in = config_line.indexOf("file::");
+                        if (in != -1){
+                            tagGroup_filename = config_line.mid(in + 6);
+                        }
+                    }
+                }
+            }
+            else {
+                break;
+            }
+        }
+    }
 }
 
 void MainWindow::init_objects() {
@@ -105,8 +187,6 @@ void MainWindow::init_lists() {
 
     // Read listIndex
 
-    bool flag = true;
-
     QFile textFile(list_filename);
 
     if (textFile.open(QIODevice::ReadOnly | QIODevice::Text)){
@@ -116,7 +196,7 @@ void MainWindow::init_lists() {
             QString line = textStream.readLine();
 
             if ( !line.isNull()) {
-                if ( !line.startsWith("#")){
+                if ( !line.startsWith("#") && !line.isEmpty()){
                     ClipList *nClipList = new ClipList(this);
                     nClipList->importClipFile(line);
                     nClipList->listName = line;
@@ -180,6 +260,13 @@ void MainWindow::init_connections() {
     connect(ui->tree_Clips,SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)),this,SLOT(onTreeWidgetItem_doubleclicked(QTreeWidgetItem*,int)));
 
     connect(ui->tree_List,SIGNAL(itemChanged(QTreeWidgetItem*,int)),this,SLOT(onListTreeItemChanged(QTreeWidgetItem*,int)));
+
+    connect(ui->actionSave_Data,SIGNAL(triggered(bool)),this,SLOT(onSaveRequested()));
+    connect(ui->actionCreate_Backup,SIGNAL(triggered(bool)),this,SLOT(onBackupRequested()));
+    connect(ui->actionExport_List,SIGNAL(triggered(bool)),this,SLOT(onExportRequested()));
+
+    connect(ui->button_save,SIGNAL(clicked(bool)),this,SLOT(onSaveRequested()));
+    connect(ui->button_export,SIGNAL(clicked(bool)),this,SLOT(onExportRequested()));
 
 }
 
@@ -280,8 +367,113 @@ void MainWindow::init_contextMenus() {
     connect(ui->tree_Clips,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(onClipTreeContextMenu(QPoint)));
     connect(clipItemContextMenu,SIGNAL(triggered(QAction*)),this,SLOT(onClipTreeContextMenuSelect(QAction*)));
 
+    listItemContextMenu = new QMenu(this);
+    ui->tree_List->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->tree_List,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(onListTreeContextMenu(QPoint)));
+    connect(listItemContextMenu,SIGNAL(triggered(QAction*)),this,SLOT(onListTreeContextMenuSelect(QAction*)));
 
+}
 
+void MainWindow::save_files() {
+    save_mainList(QDir::currentPath(),"");
+    save_clipLists(QDir::currentPath(),"");
+    save_listIndex(QDir::currentPath(),"");
+    save_tagIndex(QDir::currentPath(),"");
+}
+
+void MainWindow::backup_files() {
+    QDateTime time = QDateTime::currentDateTime();
+    QString identifier = time.toString("MMMdd_yy_hh_mm_ss");
+    QString backup_loc = time.toString("MMMdd_hhmmss");
+
+    save_mainList(QDir::currentPath() + "/backup/" + backup_loc,identifier);
+    save_clipLists(QDir::currentPath()+ "/backup/" + backup_loc,identifier);
+    save_listIndex(QDir::currentPath()+ "/backup/" + backup_loc,identifier);
+    save_tagIndex(QDir::currentPath() + "/backup/" + backup_loc,identifier);
+}
+
+void MainWindow::export_list() {
+    QString dPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+    save_mainList(dPath,"");
+    qDebug()<<"Index exported to: " + dPath + "/index.txt";
+}
+
+void MainWindow::save_mainList(QString path, QString identifiers) {
+    QDir dir(path);
+    if (!dir.exists()){
+        dir.mkpath(path);
+    }
+    clipDB->mainList->exportClipFile(path + "/index" + identifiers + ".txt");
+}
+
+void MainWindow::save_clipLists(QString path, QString identifiers) {
+    QDir dir(path);
+    if (!dir.exists()){
+        dir.mkpath(path);
+    }
+    QMutableVectorIterator<ClipList *>i(clipDB->database);
+    while(i.hasNext()){
+        ClipList *next = i.next();
+        next->exportClipFile(path + "/" + next->listName + identifiers + ".txt");
+    }
+}
+
+void MainWindow::save_listIndex(QString path, QString identifiers) {
+    QDir dir(path);
+    if (!dir.exists()){
+        dir.mkpath(path);
+    }
+    QString listName_chop = list_filename;
+    listName_chop.chop(listName_chop.length() - listName_chop.lastIndexOf(".txt"));
+    QFile listIndex(path + "/" + listName_chop + identifiers + ".txt" );
+
+    if (listIndex.open(QIODevice::WriteOnly | QIODevice::Text)){
+        QTextStream listStream(&listIndex);
+        listIndex.resize(0);
+        listStream<<"##List Index"<<endl;
+        QMutableVectorIterator<ClipList *>i(clipDB->database);
+        while(i.hasNext()){
+            listStream<<i.next()->listName<<endl;
+        }
+    }
+}
+
+void MainWindow::save_tagIndex(QString path, QString identifiers) {
+    QDir dir(path);
+    if (!dir.exists()){
+        dir.mkpath(path);
+    }
+    QString tagName_chop = tagGroup_filename;
+    tagName_chop.chop(tagName_chop.length() - tagName_chop.lastIndexOf(".txt"));
+    QFile tagIndex(path + "/" + tagName_chop + identifiers + ".txt" );
+
+    if (tagIndex.open(QIODevice::WriteOnly | QIODevice::Text)){
+        QTextStream tagStream(&tagIndex);
+        tagIndex.resize(0);
+        tagStream<<"##Tag Index"<<endl<<endl;
+
+        QMutableVectorIterator<TagGroup *>i(ui->tree_Tags->tagGroups);
+        while(i.hasNext()){
+            TagGroup *next = i.next();
+            if (next->tagList.count() != 0){
+                tagStream<<next->listName<<"::"<<next->tagList.at(0);
+                for (int j = 1; j <next->tagList.count(); j++){
+                    tagStream<<"|"<<next->tagList.at(j);
+                }
+                tagStream<<endl;
+            }
+        }
+    }
+
+}
+
+void MainWindow::setWorkingDirectory(QString path){
+    QDir dir(path);
+    if (!dir.exists()){
+        dir.mkpath(path);
+    }
+
+    QDir::setCurrent(dir.absolutePath());
 }
 
 void MainWindow::clearSearchBoxes() {
@@ -488,6 +680,7 @@ void MainWindow::showClipTree(ClipList* nClip) {
 }
 
 void MainWindow::showListTree() {
+    ui->tree_List->clear();
 
     QTreeWidgetItem *nTopMain = new QTreeWidgetItem(ui->tree_List);
     nTopMain->setText(0,clipDB->mainList->listName);
@@ -502,6 +695,92 @@ void MainWindow::showListTree() {
         nTop->setFlags(nTop->flags() | Qt::ItemIsUserCheckable);
         nTop->setCheckState(0,Qt::Unchecked);
         ui->tree_List->addTopLevelItem(nTop);
+    }
+}
+
+void MainWindow::addList(QString nListName) {
+    ClipList *nList = new ClipList(clipDB);
+    int i = 1;
+    QStringList lNames = getListNames();
+
+    if ( lNames.contains(nListName)){
+        while (lNames.contains(nListName + QString("(%1)").arg(i))){
+            i++;
+        }
+
+        nListName.append(QString("(%1)").arg(i));
+    }
+    nList->listName = nListName;
+    clipDB->database.append(nList);
+
+    showListTree();
+
+}
+
+void MainWindow::duplicateList(QString oList) {
+    ClipList *nList = new ClipList(clipDB);
+    int i = 1;
+    QStringList lNames = getListNames();
+    QString nName = oList;
+
+    if ( lNames.contains(nName)){
+        while (lNames.contains(nName + QString("(%1)").arg(i))){
+            i++;
+        }
+
+        nName.append(QString("(%1)").arg(i));
+    }
+    nList->listName = nName;
+    nList->list = getClipsFromList(oList);
+    clipDB->database.append(nList);
+    showListTree();
+}
+
+void MainWindow::removeList(QString rList) {
+    QMutableVectorIterator<ClipList*>i(clipDB->database);
+
+    while(i.hasNext()){
+        ClipList* next = i.next();
+        if (next->listName == rList){
+            clipDB->database.removeOne(next);
+            break;
+        }
+    }
+    showListTree();
+}
+
+void MainWindow::clearList(QString cList) {
+    QMutableVectorIterator<ClipList*>i(clipDB->database);
+
+    while(i.hasNext()){
+        ClipList* next = i.next();
+        if (next->listName == cList){
+            next->list.clear();
+            break;
+        }
+    }
+    showListTree();
+}
+
+QStringList MainWindow::getListNames() {
+    QMutableVectorIterator<ClipList*>i(clipDB->database);
+    QStringList nNames;
+
+    while(i.hasNext()){
+        nNames.append(i.next()->listName);
+    }
+
+    nNames.append(clipDB->mainList->listName);
+    return nNames;
+}
+
+QVector<Clip*> MainWindow::getClipsFromList(QString listName) {
+    QMutableVectorIterator<ClipList*>i(clipDB->database);
+    while(i.hasNext()){
+        ClipList* next = i.next();
+        if (next->listName == listName){
+            return next->list;
+        }
     }
 }
 
@@ -838,6 +1117,7 @@ void MainWindow::onClipTreeContextMenu(const QPoint &point) {
     QModelIndex index = ui->tree_Clips->indexAt(point);
 
     if (index.isValid()){
+        QPoint nPoint(point.x()+15, point.y()+20);
         QTreeWidgetItem *nItem = ui->tree_Clips->itemAt(point);
         QStringList idList;
         if ( !nItem->parent()){
@@ -879,7 +1159,7 @@ void MainWindow::onClipTreeContextMenu(const QPoint &point) {
             action1->setData(dataList);
         }
 
-        clipItemContextMenu->exec(ui->tree_Clips->mapToGlobal(point));
+        clipItemContextMenu->exec(ui->tree_Clips->mapToGlobal(nPoint));
     }
 }
 
@@ -920,4 +1200,120 @@ void MainWindow::onClipTreeContextMenuSelect(QAction *action) {
         }
         onListTreeItemChanged(NULL,0);
     }
+}
+
+void MainWindow::onListTreeContextMenu(const QPoint &point) {
+
+    QModelIndex index = ui->tree_List->indexAt(point);
+    QPoint nPoint(point.x()+15, point.y()+20);
+    listItemContextMenu->clear();
+    {
+        QString text = "Add new list";
+        QVariantList nData;
+        QAction *nAction = new QAction(this);
+        listItemContextMenu->addAction(nAction);
+        nAction->setText(text);
+        nData.append(QString("New List"));
+        nAction->setData(nData);
+    }
+    if (index.isValid()){
+        QTreeWidgetItem *nItem = ui->tree_List->itemAt(point);
+        QString nList = nItem->text(0);
+
+
+        {
+            QVariantList nData;
+            QAction *nAction = new QAction(this);
+            listItemContextMenu->addAction(nAction);
+            nAction->setText("Duplicate " + nList);
+            nData.append(QString("Duplicate List"));
+            nData.append(nList);
+            nAction->setData(nData);
+        }
+        {
+            QVariantList nData;
+            QAction *rAction = new QAction(this);
+            listItemContextMenu->addAction(rAction);
+            rAction->setText("Remove " + nList);
+            nData.append(QString("Remove List"));
+            nData.append(nList);
+            rAction->setData(nData);
+        }
+        {
+            QVariantList nData;
+            QAction *cAction = new QAction(this);
+            listItemContextMenu->addAction(cAction);
+            cAction->setText("Clear " + nList);
+            nData.append(QString("Clear List"));
+            nData.append(nList);
+            cAction->setData(nData);
+        }
+
+    }
+
+    listItemContextMenu->exec(ui->tree_List->mapToGlobal(nPoint));
+
+}
+
+void MainWindow::onListTreeContextMenuSelect(QAction *action) {
+    QVariantList varList = action->data().toList();
+
+    QString command = varList.at(0).toString();
+
+    if (command == "New List"){
+        QString title = "New List Name";
+        QString request = "List Name: ";
+        bool ok;
+        while (true) {
+            QString nListName = QInputDialog::getText(this,tr(title.toLatin1()),tr(request.toLatin1()),QLineEdit::Normal,"ListName.txt", &ok);
+            if (!ok){
+                break;
+            }
+
+            else if(nListName.endsWith(".txt")
+                    && !nListName.contains("\\")
+                    && !nListName.contains("/")
+                    && !nListName.contains(":")
+                    && !nListName.contains("*")
+                    && !nListName.contains("?")
+                    && !nListName.contains("\"")
+                    && !nListName.contains("<")
+                    && !nListName.contains(">")
+                    && !nListName.contains("|")){
+                // Create new list
+                addList(nListName);
+                break;
+            }
+            request = "List Name: // Cannot contain \\ / : * ? \" > < | and must end with .txt";
+        }
+    }
+    else if (command == "Duplicate List"){
+        QString dupName = varList.at(1).toString();
+
+        duplicateList(dupName);
+    }
+    else if (command == "Remove List"){
+        QString remName = varList.at(1).toString();
+
+        removeList(remName);
+    }
+    else if (command == "Clear List"){
+        QString cName = varList.at(1).toString();
+
+        clearList(cName);
+    }
+
+}
+
+void MainWindow::onSaveRequested(){
+    save_files();
+    backup_files();
+}
+
+void MainWindow::onBackupRequested(){
+    backup_files();
+}
+
+void MainWindow::onExportRequested(){
+    export_list();
 }

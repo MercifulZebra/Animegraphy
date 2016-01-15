@@ -19,10 +19,11 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = 0);
+    explicit MainWindow(QString config,QWidget *parent = 0);
     ~MainWindow();
 
     void init();
+    void init_config();
     void init_objects();
     void init_lists();
     void init_eventFilters();
@@ -33,6 +34,16 @@ public:
     void init_tagTree();
     void init_listTree();
     void init_contextMenus();
+
+    void save_files();
+    void backup_files();
+    void export_list();
+    void save_mainList(QString path, QString identifiers);
+    void save_clipLists(QString path, QString identifiers);
+    void save_listIndex(QString path, QString identifiers);
+    void save_tagIndex(QString path, QString identifiers);
+
+    void setWorkingDirectory(QString path);
 
     void clearSearchBoxes();
     bool eventFilter(QObject *, QEvent *);
@@ -47,6 +58,12 @@ public:
     void showClipTree(ClipList* nClips);
 
     void showListTree();
+    void addList(QString nList);
+    void duplicateList(QString oList);
+    void removeList(QString rList);
+    void clearList(QString cList);
+    QStringList getListNames();
+    QVector<Clip*> getClipsFromList(QString listName);
 
     void addKeyTags(QString nTag);
     void addSubTags(QString nTag);
@@ -57,11 +74,14 @@ public:
     //Parse.cpp
 
 public:
+    QString config_filename;
     QString index_filename;
     QString list_filename;
     QString showHistory_filename;
     QString tagHistory_filename;
     QString tagGroup_filename;
+
+    bool save_flag;
 
     ClipDatabase    *clipDB;
 
@@ -87,6 +107,7 @@ public:
     QMenu          *clipItemContextMenu;
     QMenu          *clipAddMenu;
     QMenu          *clipRemoveMenu;
+    QMenu          *listItemContextMenu;
 
 private slots:
     void tabSwitch(bool);
@@ -105,6 +126,13 @@ private slots:
 
     void onClipTreeContextMenu(const QPoint &);
     void onClipTreeContextMenuSelect(QAction*);
+
+    void onListTreeContextMenu(const QPoint &);
+    void onListTreeContextMenuSelect(QAction*);
+
+    void onSaveRequested();
+    void onBackupRequested();
+    void onExportRequested();
 
 private:
     Ui::MainWindow *ui;
