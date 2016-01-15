@@ -1,0 +1,5 @@
+## otherList3.txt
+
+Other Clip 21 | 1 | 00:23:00 - 00:23:14 | https://youtu.be/ezBu6ymaJR0?t=15s | Magic,Failure,Scream,Red | Sees Bloody knife, screams runs into person |  | 
+Other Clip 22 | 2 | 00:02:20 - 00:03:00 | https://my.mixtape.moe/pmaade.webm | Tag1List3 | Rawr |  | 
+Other Clip 23 | 2 | 00:02:20 - 00:03:00 | https://my.mixtape.moe/pmaade.webm | Tag2List3 | Rawr |  | 

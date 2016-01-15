@@ -1,0 +1,5 @@
+## otherList1.txt
+
+Other Clip 1 | 1 | 00:23:00 - 00:23:14 | https://youtu.be/ezBu6ymaJR0?t=15s | Misunderstanding,Failure,Scream,Red | Sees Bloody knife, screams runs into person |  | 
+Other Clip 2 | 2 | 00:02:20 - 00:03:00 | https://my.mixtape.moe/pmaade.webm | Tag1List1 | Rawr |  | 
+Other Clip 3 | 2 | 00:02:20 - 00:03:00 | https://my.mixtape.moe/pmaade.webm | Tag2List1 | Rawr |  | 

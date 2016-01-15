@@ -1,0 +1,3 @@
+COLORS::red|green|blue|yellow|orange|grey|black|white
+CAMERA::PAN|ZOOM IN|ZOOM OUT|SPIN|FOLLOW
+WORDS::Hello|Good-Bye|NANI?!|Dammit
