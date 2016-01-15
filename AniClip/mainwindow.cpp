@@ -20,6 +20,7 @@
 #include <QMutableVectorIterator>
 #include <QDesktopServices>
 #include <QInputDialog>
+#include <QDir>
 
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -65,6 +66,7 @@ MainWindow::~MainWindow()
 }
 
 void MainWindow::init() {
+    qDebug()<<"MW"<<QDir::current();
 
     init_objects();
     init_lists();
